@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import MediaGallery from '@/components/site/media-gallery';
-import { getDigitalContent } from '@/lib/gated-content';
+import { getDigitalContent, PREVIEW } from '@/lib/gated-content';
 import { getMemberAreaSettings } from '@/lib/member-area';
+import { isPreview } from '@/lib/preview';
 import { getCurrentMember } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,8 @@ export default async function DigitalContentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const member = await getCurrentMember();
+  // An editor previewing from Source needs no member login.
+  const member = (await isPreview()) ? PREVIEW : await getCurrentMember();
   if (!member) {
     redirect('/login');
   }

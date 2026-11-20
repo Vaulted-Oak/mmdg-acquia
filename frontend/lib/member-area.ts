@@ -6,7 +6,7 @@
 import 'server-only';
 
 import type { MemberContact } from './members';
-import { getSourceClient } from './source';
+import { getContentClient, isPreview } from './preview';
 
 export interface LinkSetting {
   href: string;
@@ -62,8 +62,11 @@ function toLink(link: SourceLink | null | undefined, fallbackLabel: string) {
 
 export async function getMemberAreaSettings(): Promise<MemberAreaSettings> {
   try {
-    const items = (await getSourceClient().getCollection('node--member_area', {
-      queryString: 'filter[status]=1&sort=-changed&page[limit]=1',
+    const client = await getContentClient();
+    // Members get the published item; an editor preview takes the latest.
+    const published = (await isPreview()) ? '' : 'filter[status]=1&';
+    const items = (await client.getCollection('node--member_area', {
+      queryString: `${published}sort=-changed&page[limit]=1`,
     })) as SourceSettings[] | null;
     const item = items?.[0];
     if (!item) {

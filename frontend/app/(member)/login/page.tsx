@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getMemberAreaSettings } from '@/lib/member-area';
+import { isPreview } from '@/lib/preview';
 import { getCurrentMember } from '@/lib/session';
 import { login } from './actions';
 
@@ -16,7 +17,8 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  if (await getCurrentMember()) {
+  // In an editor preview the page stays put, so its text can be checked.
+  if (!(await isPreview()) && (await getCurrentMember())) {
     redirect('/member-dashboard');
   }
   const [{ status }, settings] = await Promise.all([

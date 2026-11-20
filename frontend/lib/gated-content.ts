@@ -9,11 +9,14 @@
  * Rule (same as the WordPress site): a member has one tier and may see an
  * item when that tier is ticked on it. An item with no tiers ticked is
  * visible to no one. An expired or unmapped member sees everything locked.
+ *
+ * An editor previewing from Source (see ./preview) is the exception: they see
+ * every item unlocked, drafts included, read with their own Source login.
  */
 import 'server-only';
 
 import { isActive, tierNameFor, type Member } from './members';
-import { getSourceClient } from './source';
+import { getContentClient } from './preview';
 
 interface SourceTier {
   id: string;
@@ -105,17 +108,26 @@ export interface BenefitView {
   cta: { label: string; href: string } | null;
 }
 
-function memberTier(member: Member): string | null {
-  return isActive(member) ? tierNameFor(member) : null;
-}
+/** Stands in for a member when an editor previews from Source. */
+export const PREVIEW = 'preview';
+export type Viewer = Member | typeof PREVIEW;
 
 function canSee(
   tiers: SourceTier[] | null | undefined,
-  tierName: string | null,
+  viewer: Viewer,
 ): boolean {
+  if (viewer === PREVIEW) {
+    return true;
+  }
+  const tierName = isActive(viewer) ? tierNameFor(viewer) : null;
   return (
     tierName !== null && (tiers ?? []).some((tier) => tier.name === tierName)
   );
+}
+
+/** Members only ever see published items; a preview includes drafts. */
+function publishedFilter(viewer: Viewer): string {
+  return viewer === PREVIEW ? '' : 'filter[status]=1&';
 }
 
 function sourceOrigin(): string {
@@ -165,10 +177,12 @@ export function toEmbedUrl(url: string): string {
   return url;
 }
 
-async function loadAll(): Promise<SourceDigitalContent[]> {
-  const items = (await getSourceClient().getCollection('node--digital_content', {
+async function loadAll(viewer: Viewer): Promise<SourceDigitalContent[]> {
+  const client = await getContentClient();
+  const items = (await client.getCollection('node--digital_content', {
     queryString:
-      'filter[status]=1&sort=title&include=tiers,videos,videos.tiers,' +
+      publishedFilter(viewer) +
+      'sort=title&include=tiers,videos,videos.tiers,' +
       'collection,cover_image.media_image,gallery.media_image',
   })) as SourceDigitalContent[] | null;
   return items ?? [];
@@ -176,15 +190,14 @@ async function loadAll(): Promise<SourceDigitalContent[]> {
 
 /** Every published Digital Content item, flagged locked or open. */
 export async function listDigitalContent(
-  member: Member,
+  viewer: Viewer,
 ): Promise<DigitalContentCard[]> {
-  const tierName = memberTier(member);
-  return (await loadAll()).map((item) => ({
+  return (await loadAll(viewer)).map((item) => ({
     id: item.id,
     title: item.title,
     collection: item.collection?.name ?? null,
     image: toImage(item.cover_image),
-    locked: !canSee(item.tiers, tierName),
+    locked: !canSee(item.tiers, viewer),
   }));
 }
 
@@ -194,11 +207,12 @@ export async function listDigitalContent(
  */
 export async function getDigitalContent(
   id: string,
-  member: Member,
+  viewer: Viewer,
 ): Promise<DigitalContentView | null> {
-  const tierName = memberTier(member);
-  const item = (await loadAll()).find((candidate) => candidate.id === id);
-  if (!item || !canSee(item.tiers, tierName)) {
+  const item = (await loadAll(viewer)).find(
+    (candidate) => candidate.id === id,
+  );
+  if (!item || !canSee(item.tiers, viewer)) {
     return null;
   }
   return {
@@ -210,10 +224,10 @@ export async function getDigitalContent(
       .map(toImage)
       .filter((image): image is ImageView => image !== null),
     videos: (item.videos ?? [])
-      .filter((video) => video.status)
+      .filter((video) => video.status || viewer === PREVIEW)
       .map((video) => {
         const url = video.video_url?.uri;
-        if (!url || !canSee(video.tiers, tierName)) {
+        if (!url || !canSee(video.tiers, viewer)) {
           return { id: video.id, title: video.title, locked: true };
         }
         return {
@@ -228,13 +242,13 @@ export async function getDigitalContent(
 }
 
 /** The benefits a member's tier includes, in the editors' order. */
-export async function listBenefits(member: Member): Promise<BenefitView[]> {
-  const tierName = memberTier(member);
-  const items = (await getSourceClient().getCollection('node--benefit', {
-    queryString: 'filter[status]=1&sort=weight,title&include=tiers',
+export async function listBenefits(viewer: Viewer): Promise<BenefitView[]> {
+  const client = await getContentClient();
+  const items = (await client.getCollection('node--benefit', {
+    queryString: `${publishedFilter(viewer)}sort=weight,title&include=tiers`,
   })) as SourceBenefit[] | null;
   return (items ?? [])
-    .filter((item) => canSee(item.tiers, tierName))
+    .filter((item) => canSee(item.tiers, viewer))
     .map((item) => {
       const href = safeHref(item.cta_link?.uri);
       return {

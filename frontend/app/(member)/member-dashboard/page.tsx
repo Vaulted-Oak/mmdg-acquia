@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { listBenefits, listDigitalContent } from '@/lib/gated-content';
+import {
+  listBenefits,
+  listDigitalContent,
+  PREVIEW,
+} from '@/lib/gated-content';
 import { getMemberAreaSettings } from '@/lib/member-area';
-import { isActive, tierNameFor } from '@/lib/members';
+import { isActive, tierNameFor, type Member } from '@/lib/members';
+import { isPreview } from '@/lib/preview';
 import { getCurrentMember } from '@/lib/session';
 import { logout } from '../login/actions';
 
@@ -24,17 +29,28 @@ function formatDate(isoDate: string): string {
   });
 }
 
+/** Shown in the membership card when an editor previews from Source. */
+const PREVIEW_MEMBER: Member = {
+  id: 'preview',
+  email: '',
+  firstName: 'Editor',
+  category: '',
+  expiresOn: '2099-12-31',
+};
+
 export default async function MemberDashboardPage() {
-  const member = await getCurrentMember();
+  const preview = await isPreview();
+  const member = preview ? PREVIEW_MEMBER : await getCurrentMember();
   if (!member) {
     redirect('/login');
   }
+  const viewer = preview ? PREVIEW : member;
   const active = isActive(member);
-  const tierName = tierNameFor(member);
+  const tierName = preview ? 'Preview: all tiers' : tierNameFor(member);
   const [settings, benefits, cards] = await Promise.all([
     getMemberAreaSettings(),
-    listBenefits(member),
-    listDigitalContent(member),
+    listBenefits(viewer),
+    listDigitalContent(viewer),
   ]);
   const contact = member.contact ?? settings.defaultContact;
 
@@ -62,10 +78,12 @@ export default async function MemberDashboardPage() {
           <p className="mt-6 text-2xl lg:text-3xl">
             {tierName ?? 'No membership tier'}
           </p>
-          <p className="mt-4 text-lg lg:text-xl">
-            {active ? 'Expiration Date' : 'Expired'}:{' '}
-            {formatDate(member.expiresOn)}
-          </p>
+          {!preview && (
+            <p className="mt-4 text-lg lg:text-xl">
+              {active ? 'Expiration Date' : 'Expired'}:{' '}
+              {formatDate(member.expiresOn)}
+            </p>
+          )}
           {!active && (
             <p role="alert" className="mt-4 text-lg text-brand-dark">
               Your membership has expired. Renew it to see your benefits and
