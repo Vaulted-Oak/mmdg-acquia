@@ -1,0 +1,25 @@
+{
+  "label": "Digital Content — Full content",
+  "entityType": "node",
+  "bundle": "digital_content",
+  "viewMode": "full",
+  "elements": {
+    "digital-content": {
+      "type": "js.digital_content",
+      "props": {
+        "title": {
+          "sourceType": "entity-field",
+          "expression": "ℹ︎␜entity:node:digital_content␝title␞␟value"
+        },
+        "collection": {
+          "sourceType": "entity-field",
+          "expression": "ℹ︎␜entity:node:digital_content␝collection␞␟entity␜␜entity:taxonomy_term␝name␞␟value"
+        },
+        "body": {
+          "sourceType": "entity-field",
+          "expression": "ℹ︎␜entity:node:digital_content␝body␞␟processed"
+        }
+      }
+    }
+  }
+}

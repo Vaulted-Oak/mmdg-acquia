@@ -4,7 +4,7 @@
   "globalCssPath": "app/globals.css",
   "sync": {
     "pages": false,
-    "contentTemplates": false,
+    "contentTemplates": true,
     "pageTemplates": false
   }
 }

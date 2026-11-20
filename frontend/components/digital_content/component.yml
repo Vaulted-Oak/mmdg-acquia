@@ -1,0 +1,25 @@
+name: Digital Content
+machineName: digital_content
+status: true
+required:
+  - title
+props:
+  properties:
+    title:
+      title: Title
+      type: string
+      examples:
+        - Three Preludes
+    collection:
+      title: Collection
+      type: string
+      examples:
+        - Digital Exhibit
+    body:
+      title: Body
+      type: string
+      examples:
+        - <p>A short introduction to this digital content.</p>
+      contentMediaType: text/html
+      x-formatting-context: block
+slots: {}
