@@ -45,3 +45,6 @@ next-env.d.ts
 /.canvas/
 .vercel
 .env*
+
+# Canvas CLI build output
+/dist/
