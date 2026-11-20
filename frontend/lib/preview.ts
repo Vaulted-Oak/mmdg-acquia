@@ -28,6 +28,21 @@ export async function isPreview(): Promise<boolean> {
 }
 
 /**
+ * A Source link that starts this same preview in its own browser tab, at
+ * the given app path. Editors can bookmark it: Source checks their login
+ * each time. Null outside a preview, or when Source did not supply one.
+ */
+export async function getStandalonePreviewLink(
+  path: string,
+): Promise<string | null> {
+  if (!(await isPreview())) {
+    return null;
+  }
+  const renewUrl = (await getDraftData())?.renewUrl;
+  return renewUrl ? `${renewUrl}?path=${encodeURIComponent(path)}` : null;
+}
+
+/**
  * The client to read member content with: the editor's own in a preview,
  * otherwise the server's. An expired session falls back to the server
  * client, where the usual member login and tier checks apply again.
