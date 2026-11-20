@@ -2,6 +2,10 @@ import { CanvasRuntime } from '@drupal-canvas/headless-next/CanvasRuntime';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { DraftIndicator } from '../components/draft-indicator';
+import SwrFallback, {
+  type FallbackEntry,
+} from '../components/swr-fallback';
+import { getMenu } from '../lib/menu';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -9,13 +13,25 @@ export const metadata: Metadata = {
   description: 'A minimal Drupal Canvas headless frontend.',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  // Keys match the SWR keys the Canvas components use, so the components
+  // render this server-loaded data without fetching from the browser.
+  const entries: FallbackEntry[] = [
+    [['menu_items', 'main'], await getMenu('main')],
+  ];
+
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
         <CanvasRuntime>
-          <DraftIndicator />
-          {children}
+          <SwrFallback entries={entries}>
+            <DraftIndicator />
+            {children}
+          </SwrFallback>
         </CanvasRuntime>
       </body>
     </html>
