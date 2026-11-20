@@ -2,6 +2,7 @@ import { CanvasRuntime } from '@drupal-canvas/headless-next/CanvasRuntime';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { DraftIndicator } from '../components/draft-indicator';
+import { PreviewNotice } from '../components/preview-notice';
 import SwrFallback, {
   type FallbackEntry,
 } from '../components/swr-fallback';
@@ -30,6 +31,7 @@ export default async function RootLayout({
         <CanvasRuntime>
           <SwrFallback entries={entries}>
             <DraftIndicator />
+            <PreviewNotice />
             {children}
           </SwrFallback>
         </CanvasRuntime>
