@@ -19,6 +19,19 @@ export interface Member {
   category: string;
   /** Last day of membership, `YYYY-MM-DD`. */
   expiresOn: string;
+  /**
+   * The staff member who looks after this member (Salesforce
+   * `Membership_Solicitor__c`). Without one, the default contact from the
+   * Member Area Settings in Source is shown.
+   */
+  contact?: MemberContact;
+}
+
+export interface MemberContact {
+  name: string;
+  title?: string;
+  phone?: string;
+  email?: string;
 }
 
 export interface MemberDirectory {
@@ -75,9 +88,9 @@ const MOCK_MEMBERS: Member[] = [
   {
     id: 'partner',
     email: 'partner@example.com',
-    firstName: 'Pat',
-    category: '5. Starting Partner',
-    expiresOn: '2099-12-31',
+    firstName: 'Michelle',
+    category: '6. Supporting Partner',
+    expiresOn: '2027-04-30',
   },
   {
     id: 'hero',

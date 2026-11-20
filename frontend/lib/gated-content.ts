@@ -20,6 +20,22 @@ interface SourceTier {
   name: string;
 }
 
+interface SourceImageFile {
+  uri?: { url?: string } | null;
+  resourceIdObjMeta?: {
+    alt?: string | null;
+    width?: number | null;
+    height?: number | null;
+  } | null;
+}
+
+interface SourceMedia {
+  id: string;
+  name?: string;
+  /** Missing when the server credential may not view media. */
+  media_image?: SourceImageFile | null;
+}
+
 interface SourceVideo {
   id: string;
   title: string;
@@ -35,6 +51,25 @@ interface SourceDigitalContent {
   body?: { processed?: string } | null;
   tiers?: SourceTier[] | null;
   videos?: SourceVideo[] | null;
+  collection?: { name?: string } | null;
+  cover_image?: SourceMedia | null;
+  gallery?: SourceMedia[] | null;
+}
+
+interface SourceBenefit {
+  id: string;
+  title: string;
+  body?: { processed?: string } | null;
+  tiers?: SourceTier[] | null;
+  cta_text?: string | null;
+  cta_link?: { uri?: string | null } | null;
+}
+
+export interface ImageView {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
 }
 
 export interface VideoView {
@@ -49,14 +84,25 @@ export interface VideoView {
 export interface DigitalContentCard {
   id: string;
   title: string;
+  collection: string | null;
+  image: ImageView | null;
   locked: boolean;
 }
 
 export interface DigitalContentView {
   id: string;
   title: string;
+  collection: string | null;
   bodyHtml: string;
   videos: VideoView[];
+  gallery: ImageView[];
+}
+
+export interface BenefitView {
+  id: string;
+  title: string;
+  bodyHtml: string;
+  cta: { label: string; href: string } | null;
 }
 
 function memberTier(member: Member): string | null {
@@ -70,6 +116,31 @@ function canSee(
   return (
     tierName !== null && (tiers ?? []).some((tier) => tier.name === tierName)
   );
+}
+
+function sourceOrigin(): string {
+  return (process.env.CANVAS_SITE_URL ?? '').replace(/\/+$/, '');
+}
+
+function toImage(media: SourceMedia | null | undefined): ImageView | null {
+  const file = media?.media_image;
+  const url = file?.uri?.url;
+  if (!url) {
+    return null;
+  }
+  const meta = file.resourceIdObjMeta;
+  return {
+    // Source returns site-relative file paths.
+    src: url.startsWith('http') ? url : `${sourceOrigin()}${url}`,
+    alt: meta?.alt ?? '',
+    width: meta?.width ?? undefined,
+    height: meta?.height ?? undefined,
+  };
+}
+
+/** Only web links and mailto links from Source may become a button. */
+function safeHref(uri: string | null | undefined): string | null {
+  return uri && /^(https?:|mailto:|\/)/i.test(uri) ? uri : null;
 }
 
 /** Turns a Vimeo or YouTube page link into its player URL. */
@@ -97,7 +168,8 @@ export function toEmbedUrl(url: string): string {
 async function loadAll(): Promise<SourceDigitalContent[]> {
   const items = (await getSourceClient().getCollection('node--digital_content', {
     queryString:
-      'filter[status]=1&include=tiers,videos,videos.tiers&sort=title',
+      'filter[status]=1&sort=title&include=tiers,videos,videos.tiers,' +
+      'collection,cover_image.media_image,gallery.media_image',
   })) as SourceDigitalContent[] | null;
   return items ?? [];
 }
@@ -110,6 +182,8 @@ export async function listDigitalContent(
   return (await loadAll()).map((item) => ({
     id: item.id,
     title: item.title,
+    collection: item.collection?.name ?? null,
+    image: toImage(item.cover_image),
     locked: !canSee(item.tiers, tierName),
   }));
 }
@@ -130,7 +204,11 @@ export async function getDigitalContent(
   return {
     id: item.id,
     title: item.title,
+    collection: item.collection?.name ?? null,
     bodyHtml: item.body?.processed ?? '',
+    gallery: (item.gallery ?? [])
+      .map(toImage)
+      .filter((image): image is ImageView => image !== null),
     videos: (item.videos ?? [])
       .filter((video) => video.status)
       .map((video) => {
@@ -147,4 +225,23 @@ export async function getDigitalContent(
         };
       }),
   };
+}
+
+/** The benefits a member's tier includes, in the editors' order. */
+export async function listBenefits(member: Member): Promise<BenefitView[]> {
+  const tierName = memberTier(member);
+  const items = (await getSourceClient().getCollection('node--benefit', {
+    queryString: 'filter[status]=1&sort=weight,title&include=tiers',
+  })) as SourceBenefit[] | null;
+  return (items ?? [])
+    .filter((item) => canSee(item.tiers, tierName))
+    .map((item) => {
+      const href = safeHref(item.cta_link?.uri);
+      return {
+        id: item.id,
+        title: item.title,
+        bodyHtml: item.body?.processed ?? '',
+        cta: href && item.cta_text ? { label: item.cta_text, href } : null,
+      };
+    });
 }

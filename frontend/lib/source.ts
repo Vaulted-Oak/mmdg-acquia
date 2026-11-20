@@ -78,8 +78,21 @@ export const sourceFetch: typeof fetch = async (input, init) => {
   if (!request.url.startsWith(`${siteUrl()}/`)) {
     throw new Error('sourceFetch only sends requests to the Source site.');
   }
-  request.headers.set('Authorization', `Bearer ${await getToken()}`);
-  return fetch(request, { cache: 'no-store' });
+  // Kept aside in case the request has to be sent a second time.
+  const retry = request.clone();
+  const token = await getToken();
+  request.headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(request, { cache: 'no-store' });
+  if (response.status !== 401) {
+    return response;
+  }
+  // Source rejected the token (expired early or revoked). Drop it, unless
+  // another request already replaced it, and try once with a fresh one.
+  if (cachedToken?.value === token) {
+    cachedToken = null;
+  }
+  retry.headers.set('Authorization', `Bearer ${await getToken()}`);
+  return fetch(retry, { cache: 'no-store' });
 };
 
 /** JSON:API client for Source that authenticates as the server. */

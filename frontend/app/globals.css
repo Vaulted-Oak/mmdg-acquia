@@ -14,6 +14,20 @@
   --color-primary-900: var(--color-blue-900);
   --color-primary-dark: var(--color-primary-700);
   --color-primary-light: var(--color-slate-400);
+
+  /* Member area (Mark Morris Dance designs) */
+  --color-brand: #df1f2d;
+  --color-brand-dark: #b81824;
+  --color-ink: #111111;
+  --color-forest: #0f3d33;
+  --color-rule: #cfcfcf;
+}
+
+/* Inline, because next/font sets these variables on the member layout's
+   wrapper element, not on the root. */
+@theme inline {
+  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-body: var(--font-figtree), "Helvetica Neue", Arial, sans-serif;
 }
 
 html { color: var(--color-slate-950); }
