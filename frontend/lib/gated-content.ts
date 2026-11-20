@@ -13,10 +13,10 @@
  * An editor previewing from Source (see ./preview) is the exception: they see
  * every item unlocked, drafts included, read with their own Source login.
  */
-import 'server-only';
+import "server-only";
 
-import { isActive, tierNameFor, type Member } from './members';
-import { getContentClient } from './preview';
+import { isActive, tierNameFor, type Member } from "./members";
+import { getContentClient } from "./preview";
 
 interface SourceTier {
   id: string;
@@ -50,6 +50,8 @@ interface SourceVideo {
 
 interface SourceDigitalContent {
   id: string;
+  /** Head tags Source computes for the item, including its canonical link. */
+  metatag?: { tag: string; attributes?: Record<string, string> }[] | null;
   title: string;
   body?: { processed?: string } | null;
   tiers?: SourceTier[] | null;
@@ -94,9 +96,9 @@ export interface DigitalContentCard {
 
 export interface DigitalContentView {
   id: string;
+  /** The item's own path on Source (for example /node/71), if known. */
+  sourcePath: string | null;
   title: string;
-  collection: string | null;
-  bodyHtml: string;
   videos: VideoView[];
   gallery: ImageView[];
 }
@@ -109,7 +111,7 @@ export interface BenefitView {
 }
 
 /** Stands in for a member when an editor previews from Source. */
-export const PREVIEW = 'preview';
+export const PREVIEW = "preview";
 export type Viewer = Member | typeof PREVIEW;
 
 function canSee(
@@ -127,11 +129,11 @@ function canSee(
 
 /** Members only ever see published items; a preview includes drafts. */
 function publishedFilter(viewer: Viewer): string {
-  return viewer === PREVIEW ? '' : 'filter[status]=1&';
+  return viewer === PREVIEW ? "" : "filter[status]=1&";
 }
 
 function sourceOrigin(): string {
-  return (process.env.CANVAS_SITE_URL ?? '').replace(/\/+$/, '');
+  return (process.env.CANVAS_SITE_URL ?? "").replace(/\/+$/, "");
 }
 
 function toImage(media: SourceMedia | null | undefined): ImageView | null {
@@ -143,11 +145,23 @@ function toImage(media: SourceMedia | null | undefined): ImageView | null {
   const meta = file.resourceIdObjMeta;
   return {
     // Source returns site-relative file paths.
-    src: url.startsWith('http') ? url : `${sourceOrigin()}${url}`,
-    alt: meta?.alt ?? '',
+    src: url.startsWith("http") ? url : `${sourceOrigin()}${url}`,
+    alt: meta?.alt ?? "",
     width: meta?.width ?? undefined,
     height: meta?.height ?? undefined,
   };
+}
+
+/** The site-relative path Source gives the item as its canonical link. */
+function canonicalPath(item: SourceDigitalContent): string | null {
+  const href = (item.metatag ?? []).find(
+    (entry) => entry.tag === "link" && entry.attributes?.rel === "canonical",
+  )?.attributes?.href;
+  if (!href) {
+    return null;
+  }
+  const path = href.startsWith("http") ? new URL(href).pathname : href;
+  return path.startsWith("/") ? path : null;
 }
 
 /** Only web links and mailto links from Source may become a button. */
@@ -159,17 +173,17 @@ function safeHref(uri: string | null | undefined): string | null {
 export function toEmbedUrl(url: string): string {
   try {
     const { hostname, pathname, searchParams } = new URL(url);
-    const host = hostname.replace(/^www\./, '');
-    if (host === 'youtube.com' && searchParams.get('v')) {
-      return `https://www.youtube.com/embed/${searchParams.get('v')}`;
+    const host = hostname.replace(/^www\./, "");
+    if (host === "youtube.com" && searchParams.get("v")) {
+      return `https://www.youtube.com/embed/${searchParams.get("v")}`;
     }
-    if (host === 'youtu.be') {
+    if (host === "youtu.be") {
       return `https://www.youtube.com/embed${pathname}`;
     }
-    if (host === 'vimeo.com') {
+    if (host === "vimeo.com") {
       // Unlisted Vimeo links look like vimeo.com/<id>/<hash>.
-      const [id, hash] = pathname.split('/').filter(Boolean);
-      return `https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ''}`;
+      const [id, hash] = pathname.split("/").filter(Boolean);
+      return `https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ""}`;
     }
   } catch {
     // Fall through and use the link as given.
@@ -179,11 +193,11 @@ export function toEmbedUrl(url: string): string {
 
 async function loadAll(viewer: Viewer): Promise<SourceDigitalContent[]> {
   const client = await getContentClient();
-  const items = (await client.getCollection('node--digital_content', {
+  const items = (await client.getCollection("node--digital_content", {
     queryString:
       publishedFilter(viewer) +
-      'sort=title&include=tiers,videos,videos.tiers,' +
-      'collection,cover_image.media_image,gallery.media_image',
+      "sort=title&include=tiers,videos,videos.tiers," +
+      "collection,cover_image.media_image,gallery.media_image",
   })) as SourceDigitalContent[] | null;
   return items ?? [];
 }
@@ -209,17 +223,14 @@ export async function getDigitalContent(
   id: string,
   viewer: Viewer,
 ): Promise<DigitalContentView | null> {
-  const item = (await loadAll(viewer)).find(
-    (candidate) => candidate.id === id,
-  );
+  const item = (await loadAll(viewer)).find((candidate) => candidate.id === id);
   if (!item || !canSee(item.tiers, viewer)) {
     return null;
   }
   return {
     id: item.id,
+    sourcePath: canonicalPath(item),
     title: item.title,
-    collection: item.collection?.name ?? null,
-    bodyHtml: item.body?.processed ?? '',
     gallery: (item.gallery ?? [])
       .map(toImage)
       .filter((image): image is ImageView => image !== null),
@@ -235,7 +246,7 @@ export async function getDigitalContent(
           title: video.title,
           locked: false,
           embedUrl: toEmbedUrl(url),
-          descriptionHtml: video.body?.processed ?? '',
+          descriptionHtml: video.body?.processed ?? "",
         };
       }),
   };
@@ -244,7 +255,7 @@ export async function getDigitalContent(
 /** The benefits a member's tier includes, in the editors' order. */
 export async function listBenefits(viewer: Viewer): Promise<BenefitView[]> {
   const client = await getContentClient();
-  const items = (await client.getCollection('node--benefit', {
+  const items = (await client.getCollection("node--benefit", {
     queryString: `${publishedFilter(viewer)}sort=weight,title&include=tiers`,
   })) as SourceBenefit[] | null;
   return (items ?? [])
@@ -254,7 +265,7 @@ export async function listBenefits(viewer: Viewer): Promise<BenefitView[]> {
       return {
         id: item.id,
         title: item.title,
-        bodyHtml: item.body?.processed ?? '',
+        bodyHtml: item.body?.processed ?? "",
         cta: href && item.cta_text ? { label: item.cta_text, href } : null,
       };
     });

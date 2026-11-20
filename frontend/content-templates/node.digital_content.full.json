@@ -1,10 +1,10 @@
 {
-  "label": "Digital Content — Full content",
+  "label": "Digital Content content items — Full content view",
   "entityType": "node",
   "bundle": "digital_content",
   "viewMode": "full",
   "elements": {
-    "digital-content": {
+    "d0091478-77be-4a5e-b500-335497a36179": {
       "type": "js.digital_content",
       "props": {
         "title": {

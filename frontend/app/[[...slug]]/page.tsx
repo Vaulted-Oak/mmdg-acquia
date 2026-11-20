@@ -1,15 +1,15 @@
-import CanvasComponentTree from '@drupal-canvas/headless-next/CanvasComponentTree';
+import CanvasComponentTree from "@drupal-canvas/headless-next/CanvasComponentTree";
 import {
   fetchPage,
   isPageRedirect,
   toNextMetadata,
-} from '@drupal-canvas/headless-next';
-import type { Metadata } from 'next';
-import { notFound, permanentRedirect, redirect } from 'next/navigation';
-import { cache } from 'react';
-import { isPreview } from '@/lib/preview';
+} from "@drupal-canvas/headless-next";
+import type { Metadata } from "next";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
+import { cache } from "react";
+import { isPreview } from "@/lib/preview";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 interface CatchAllPageProps {
   params: Promise<{ slug?: string[] }>;
@@ -17,34 +17,37 @@ interface CatchAllPageProps {
 
 const getPage = cache((path: string) => fetchPage(path));
 
-async function getPath(params: CatchAllPageProps['params']) {
+async function getPath(params: CatchAllPageProps["params"]) {
   const { slug } = await params;
-  return `/${(slug ?? []).map(encodeURIComponent).join('/')}`;
+  return `/${(slug ?? []).map(encodeURIComponent).join("/")}`;
+}
+
+type RouteEntity = { entityType: string; bundle: string; uuid: string } | null;
+
+/** Content types that only the member area may show. */
+const MEMBER_BUNDLES = [
+  "digital_content",
+  "benefit",
+  "member_area",
+  "membership_video",
+];
+
+function isMemberContent(
+  entity: RouteEntity,
+): entity is NonNullable<RouteEntity> {
+  return (
+    entity?.entityType === "node" && MEMBER_BUNDLES.includes(entity.bundle)
+  );
 }
 
 export async function generateMetadata({
   params,
 }: CatchAllPageProps): Promise<Metadata> {
   const page = await getPage(await getPath(params));
-  return page && !isPageRedirect(page) ? toNextMetadata(page.head) : {};
-}
-
-function memberPreviewPath(
-  entity: { entityType: string; bundle: string; uuid: string } | null,
-): string | null {
-  if (entity?.entityType !== 'node') {
-    return null;
+  if (!page || isPageRedirect(page) || isMemberContent(page.route.entity)) {
+    return {};
   }
-  switch (entity.bundle) {
-    case 'digital_content':
-      return `/digital-content/${entity.uuid}`;
-    case 'benefit':
-    case 'member_area':
-    case 'membership_video':
-      return '/member-dashboard';
-    default:
-      return null;
-  }
+  return toNextMetadata(page.head);
 }
 
 export default async function CatchAllPage({ params }: CatchAllPageProps) {
@@ -54,14 +57,20 @@ export default async function CatchAllPage({ params }: CatchAllPageProps) {
     notFound();
   }
 
-  // Source previews an item by loading its own path (for example /node/21).
-  // Member content is rendered by dedicated routes, so an editor preview is
-  // sent on to the one that shows the item.
-  if (!isPageRedirect(page) && (await isPreview())) {
-    const target = memberPreviewPath(page.route.entity);
-    if (target) {
-      redirect(target);
+  // Member content is never rendered here: Source would hand this public
+  // route the item's template output without any tier check. A Digital
+  // Content item goes to its member page, which checks login and tier (or
+  // the editor's preview). The other member types have no page of their own,
+  // so an editor preview lands on the dashboard and everyone else gets a 404.
+  if (!isPageRedirect(page) && isMemberContent(page.route.entity)) {
+    const entity = page.route.entity;
+    if (entity.bundle === "digital_content") {
+      redirect(`/digital-content/${entity.uuid}`);
     }
+    if (await isPreview()) {
+      redirect("/member-dashboard");
+    }
+    notFound();
   }
 
   if (isPageRedirect(page)) {

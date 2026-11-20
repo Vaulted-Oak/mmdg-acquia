@@ -1,7 +1,12 @@
+import CanvasComponentTree from '@drupal-canvas/headless-next/CanvasComponentTree';
+import {
+  fetchEntity,
+  fetchPage,
+  isPageRedirect,
+} from '@drupal-canvas/headless-next';
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import MediaGallery from '@/components/site/media-gallery';
+import { notFound, redirect } from 'next/navigation';
+import SwrFallback from '@/components/swr-fallback';
 import { getDigitalContent, PREVIEW } from '@/lib/gated-content';
 import { getMemberAreaSettings } from '@/lib/member-area';
 import { isPreview } from '@/lib/preview';
@@ -9,6 +14,9 @@ import { getCurrentMember } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Digital Content' };
+
+// Must match DIGITAL_CONTENT_EXTRAS_KEY in components/digital_content.
+const EXTRAS_KEY = 'member-digital-content';
 
 export default async function DigitalContentPage({
   params,
@@ -31,79 +39,36 @@ export default async function DigitalContentPage({
     redirect('/member-dashboard');
   }
 
+  // Title, collection and body are laid out by the item's content template
+  // in Source. Only fetched once the tier check above has passed. Source
+  // renders a template by node ID, which it only reveals through the item's
+  // path, so the path is resolved first; the full-page result is not used
+  // because it carries Source's own header and footer.
+  const route = content.sourcePath ? await fetchPage(content.sourcePath) : null;
+  const node =
+    route && !isPageRedirect(route) && route.route.entity?.uuid === content.id
+      ? route.route.entity
+      : null;
+  const entity = node
+    ? await fetchEntity({ type: 'node', id: node.id, viewMode: 'full' })
+    : null;
+  if (!entity?.content) {
+    notFound();
+  }
+
+  // Videos and gallery are not part of the template: they are handed to the
+  // Digital Content component here, already stripped of anything locked.
+  const extras = {
+    videos: content.videos,
+    gallery: content.gallery,
+    lockText: settings.lockText,
+  };
+
   return (
-    <main className="mx-auto w-full max-w-[1440px] px-5 pt-8 pb-16 lg:px-8">
-      <Link
-        href="/member-dashboard"
-        className="text-lg text-brand underline underline-offset-4"
-      >
-        Back to Member Dashboard
-      </Link>
-
-      <header className="mx-auto mt-12 max-w-3xl text-center">
-        {content.collection && (
-          <p className="inline-block rounded-full bg-forest px-6 py-2.5 text-xs font-semibold tracking-[0.15em] text-white uppercase">
-            {content.collection}
-          </p>
-        )}
-        <h1 className="mt-5 font-display text-5xl lg:text-7xl">
-          {content.title}
-        </h1>
-        {/* Body HTML is Drupal's filtered output for an editor-written field. */}
-        <div
-          className="mt-3 flex flex-col gap-4 text-lg lg:text-xl [&_a]:text-brand [&_a]:underline"
-          dangerouslySetInnerHTML={{ __html: content.bodyHtml }}
-        />
-      </header>
-
-      {content.videos.length > 0 && (
-        <ol className="mx-auto mt-14 flex max-w-5xl flex-col gap-12">
-          {content.videos.map((video) => (
-            <li key={video.id}>
-              {video.locked ? (
-                <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-ink/85 p-6 text-center text-lg text-white">
-                  <svg
-                    width="36"
-                    height="36"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    aria-hidden="true"
-                  >
-                    <rect x="5" y="11" width="14" height="9" rx="1" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                  </svg>
-                  <p>{settings.lockText}</p>
-                </div>
-              ) : (
-                <iframe
-                  src={video.embedUrl}
-                  title={video.title}
-                  allow="fullscreen; picture-in-picture"
-                  allowFullScreen
-                  className="aspect-video w-full"
-                />
-              )}
-              <h2 className="mt-4 text-2xl">{video.title}</h2>
-              {!video.locked && (
-                <div
-                  className="mt-1 text-lg"
-                  dangerouslySetInnerHTML={{
-                    __html: video.descriptionHtml ?? '',
-                  }}
-                />
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {content.gallery.length > 0 && (
-        <div className="mx-auto mt-14 max-w-5xl">
-          <MediaGallery images={content.gallery} />
-        </div>
-      )}
+    <main>
+      <SwrFallback entries={[[EXTRAS_KEY, extras]]}>
+        <CanvasComponentTree tree={entity.content} />
+      </SwrFallback>
     </main>
   );
 }
